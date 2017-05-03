@@ -81,6 +81,7 @@ norm1 = pool1  # tf.nn.lrn(pool1, 4, bias=1.0, alpha=0.001 / 9.0, beta = 0.75, n
 
 prev_layer = norm1
 
+print('conv1 layer ready')
 with tf.variable_scope('conv2') as scope:
     out_filters = 32
     kernel = _weight_variable('weights', [5, 5, 5, in_filters, out_filters])
@@ -95,6 +96,7 @@ with tf.variable_scope('conv2') as scope:
 # normalize prev_layer here
 prev_layer = tf.nn.max_pool3d(prev_layer, ksize=[1, 3, 3, 3, 1], strides=[1, 2, 2, 2, 1], padding='SAME')
 
+print('conv2 layer ready')
 with tf.variable_scope('conv3_1') as scope:
     out_filters = 64
     kernel = _weight_variable('weights', [5, 5, 5, in_filters, out_filters])
@@ -104,6 +106,7 @@ with tf.variable_scope('conv3_1') as scope:
     prev_layer = tf.nn.relu(bias, name=scope.name)
     in_filters = out_filters
 
+print('conv3-1 layer ready')
 with tf.variable_scope('conv3_2') as scope:
     out_filters = 64
     kernel = _weight_variable('weights', [5, 5, 5, in_filters, out_filters])
@@ -113,6 +116,7 @@ with tf.variable_scope('conv3_2') as scope:
     prev_layer = tf.nn.relu(bias, name=scope.name)
     in_filters = out_filters
 
+print('conv3-2 layer ready')
 with tf.variable_scope('conv3_3') as scope:
     out_filters = 32
     kernel = _weight_variable('weights', [5, 5, 5, in_filters, out_filters])
@@ -122,6 +126,7 @@ with tf.variable_scope('conv3_3') as scope:
     prev_layer = tf.nn.relu(bias, name=scope.name)
     in_filters = out_filters
 
+print('conv3-3 layer ready')
 # normalize prev_layer here
 prev_layer = tf.nn.max_pool3d(prev_layer, ksize=[1, 3, 3, 3, 1], strides=[1, 2, 2, 2, 1], padding='SAME')
 
@@ -135,6 +140,7 @@ with tf.variable_scope('local3') as scope:
 
 prev_layer = local3
 
+print('local3 layer ready')
 with tf.variable_scope('local4') as scope:
     dim = np.prod(prev_layer.get_shape().as_list()[1:])
     prev_layer_flat = tf.reshape(prev_layer, [-1, dim])
@@ -143,6 +149,7 @@ with tf.variable_scope('local4') as scope:
     local4 = tf.nn.relu(tf.matmul(prev_layer_flat, weights) + biases, name=scope.name)
 
 prev_layer = local4
+print('local4 layer ready')
 
 with tf.variable_scope('softmax_linear') as scope:
     dim = np.prod(prev_layer.get_shape().as_list()[1:])
@@ -150,6 +157,7 @@ with tf.variable_scope('softmax_linear') as scope:
     biases = _bias_variable('biases', [3])  # num_classes
     softmax_linear = tf.add(tf.matmul(prev_layer, weights), biases, name=scope.name)
 
+print('softmax ready')
 
 cross_entropy = tf.nn.softmax_cross_entropy_with_logits(logits=softmax_linear, labels=y)
 loss = tf.reduce_mean(cross_entropy)
@@ -165,15 +173,18 @@ if __name__ == '__main__':
     sg = SampleGenerator(train_sample_ids, test_sample_ids, batch_size=5)
     # batch, label = sg.generate_samples()
     # print(batch, label)
+
     with tf.Session() as sess:
         print('Begin session')
         sess.run(tf.global_variables_initializer())
 
+        print('Init complete')
         avg_cost = 0
         for epoch in range(10):
             print('epoch : {}'.format(epoch))
             for batch_iter in range(sg.num_batches):
                 batch_x, batch_y = sg.generate_samples()
+                print('this batch generated')
                 sess.run(optimizer, feed_dict={x: batch_x, y: batch_y})
                 avg_cost += sess.run(loss, feed_dict={x: batch_x, y: batch_y})
 
