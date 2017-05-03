@@ -21,6 +21,9 @@ class SampleGenerator:
         self.index = 0
         self.test_data_ids = test_data_ids
 
+    def reset_index(self):
+        self.index = 0
+
     def batch_and_label(self, id_list):
         with h5py.File('dataset.h5', 'r') as hf:
             batch_data = []
@@ -181,6 +184,7 @@ if __name__ == '__main__':
         print('Init complete')
         avg_cost = 0
         for epoch in range(10):
+            sg.reset_index()
             print('epoch : {}'.format(epoch))
             for batch_iter in range(sg.num_batches):
                 batch_x, batch_y = sg.generate_samples()
