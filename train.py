@@ -4,53 +4,113 @@ import numpy as np
 
 
 # create sample data
-with h5py.File('dataset.h5', 'r') as hf:
-    list_samples = [x for x in hf]
-    num_samples = len(list_samples)
-    ratio = 0.9
-    split_point = int(num_samples * ratio)
-    train_sample_ids, test_sample_ids = np.split(np.random.permutation(list_samples), [split_point])
+# with h5py.File('dataset.h5', 'r') as hf:
+#     list_samples = [x for x in hf]
+#     num_samples = len(list_samples)
+#     ratio = 0.9
+#     split_point = int(num_samples * ratio)
+#     train_sample_ids, test_sample_ids = np.split(np.random.permutation(list_samples), [split_point])
 
 
 class SampleGenerator:
-    def __init__(self, data_ids, test_data_ids, batch_size):
-        num_samps = len(data_ids)
-        self.num_batches = num_samps // batch_size
-        data_ids = data_ids[:int(self.num_batches * batch_size)]
-        self.data_ids = np.split(data_ids, self.num_batches)
-        self.index = 0
-        self.test_data_ids = test_data_ids
+    def __init__(self, filename, batch_size):
+        self.filename = filename
+        self.batch_size = batch_size
+
+        train_sample_ids, test_sample_ids = self.split_dataset(ratio=0.90)
+        num_train_data = len(train_sample_ids)
+        self.num_batches = num_train_data // self.batch_size
+
+        # trim the leftovers
+        train_sample_ids = train_sample_ids[:(self.num_batches * self.batch_size)]
+        self.train_sample_sets = np.split(train_sample_ids, self.num_batches)
+        self.test_sample_ids = self.test_sample_ids
+        self.batch_index = 0
+
+        print('Train samples : {}'.format(len(train_sample_ids)))
+        print('Test samples : {}'.format(len(test_sample_ids)))
 
     def reset_index(self):
-        self.index = 0
+        self.batch_index = 0
+
+    def split_dataset(self, ratio):
+        with h5py.File(self.filename, 'r') as hf:
+            data_nums = [num for num in hf]
+        num_samples = len(data_nums)
+        split_point = int(num_samples * ratio)
+        return np.split(np.random.permutation(data_nums), [split_point])
 
     def batch_and_label(self, id_list):
-        with h5py.File('dataset.h5', 'r') as hf:
+        with h5py.File(self.filename, 'r') as hf:
             batch_data = []
             label_data = []
-            for samp_id in id_list:
-                data = np.array(hf[str(samp_id)]['data'])
-                data = data.reshape(data.shape + (1, ))
-                label = hf[str(samp_id)]['data'].attrs['label']
-                batch_data.append(data)
-                label_flag = [0, 0, 0]
 
+            for samp_id in id_list:
+                sample = hf[samp_id]['data']
+                sample.reshape(sample.shape + (1, ))
+                batch_data.append(sample)
+
+                label = hf[samp_id]['data'].attrs['label']
+                label_flag = [0, 0, 0]
                 if label == 'B':
                     label_flag[0] = 1
                 elif label == 'CD4':
                     label_flag[1] = 1
-                else:
+                elif label == 'CD8':
                     label_flag[2] = 1
+                else:
+                    raise ValueError
                 label_data.append(label_flag)
         return batch_data, label_data
 
-    def test_samples(self):
-        return self.batch_and_label(self.test_data_ids)
-
     def generate_samples(self):
-        this_batch = self.data_ids[self.index]
-        self.index += 1
-        return self.batch_and_label(this_batch)
+        set_ = self.train_sample_sets[self.batch_index]
+        self.batch_index += 1
+        return self.batch_and_label(set_)
+
+    def test_samples(self):
+        return self.batch_and_label(self.test_sample_ids)
+
+
+# class SampleGenerator:
+#     def __init__(self, data_ids, test_data_ids, batch_size):
+#         num_samps = len(data_ids)
+#         self.num_batches = num_samps // batch_size
+#         data_ids = data_ids[:int(self.num_batches * batch_size)]
+#         self.data_ids = np.split(data_ids, self.num_batches)
+#         self.index = 0
+#         self.test_data_ids = test_data_ids
+#
+#     def reset_index(self):
+#         self.index = 0
+#
+#     def batch_and_label(self, id_list):
+#         with h5py.File('dataset.h5', 'r') as hf:
+#             batch_data = []
+#             label_data = []
+#             for samp_id in id_list:
+#                 data = np.array(hf[str(samp_id)]['data'])
+#                 data = data.reshape(data.shape + (1, ))
+#                 batch_data.append(data)
+#                 label = hf[str(samp_id)]['data'].attrs['label']
+#                 label_flag = [0, 0, 0]
+#
+#                 if label == 'B':
+#                     label_flag[0] = 1
+#                 elif label == 'CD4':
+#                     label_flag[1] = 1
+#                 else:
+#                     label_flag[2] = 1
+#                 label_data.append(label_flag)
+#         return batch_data, label_data
+#
+#     def test_samples(self):
+#         return self.batch_and_label(self.test_data_ids)
+#
+#     def generate_samples(self):
+#         this_batch = self.data_ids[self.index]
+#         self.index += 1
+#         return self.batch_and_label(this_batch)
 
 
 x = tf.placeholder(tf.float32, [None, 66, 66, 66, 1])  # (batch, in_depth, in_height, in_width, in_channels]
@@ -173,7 +233,7 @@ accr = tf.reduce_mean(tf.cast(_corr, tf.float32))  # Accuracy
 print('Network ready!')
 
 if __name__ == '__main__':
-    sg = SampleGenerator(train_sample_ids, test_sample_ids, batch_size=5)
+    sg = SampleGenerator(filename='augmented_dataset.h5', batch_size=10)
     # batch, label = sg.generate_samples()
     # print(batch, label)
 
@@ -188,7 +248,6 @@ if __name__ == '__main__':
             print('epoch : {}'.format(epoch))
             for batch_iter in range(sg.num_batches):
                 batch_x, batch_y = sg.generate_samples()
-                print('this batch generated')
                 sess.run(optimizer, feed_dict={x: batch_x, y: batch_y})
                 avg_cost += sess.run(loss, feed_dict={x: batch_x, y: batch_y})
 
