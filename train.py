@@ -215,15 +215,14 @@ if __name__ == '__main__':
             for batch_iter in range(sg.num_batches):
                 batch_x, batch_y = sg.generate_samples()
                 sess.run(optimizer, feed_dict={x: batch_x, y: batch_y})
-                loss += sess.run(loss, feed_dict={x: batch_x, y: batch_y})
+                loss_val = sess.run(loss, feed_dict={x: batch_x, y: batch_y})
 
                 if batch_iter % 5 == 0:
-                    print('loss : {}'.format(loss))
+                    print('loss : {}'.format(loss_val))
                     train_acc = sess.run(accr, feed_dict={x: batch_x, y: batch_y})
                     print('train_acc : {}'.format(train_acc))
                     test_x, test_y = sg.test_samples()
                     test_acc, test_correct = sess.run([accr, _corr], feed_dict={x: test_x, y: test_y})
                     print('test_acc : {}'.format(test_acc))
-                    print('test_correct')
-                    print(test_correct)
+                    print('test_correct : {} / {}'.format(np.sum(test_correct), len(test_correct)))
                     print('')
