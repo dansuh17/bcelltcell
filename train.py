@@ -24,7 +24,7 @@ class SampleGenerator:
         # trim the leftovers
         train_sample_ids = train_sample_ids[:(self.num_batches * self.batch_size)]
         self.train_sample_sets = np.split(train_sample_ids, self.num_batches)
-        self.test_sample_ids = self.test_sample_ids
+        self.test_sample_ids = test_sample_ids
         self.batch_index = 0
 
         print('Train samples : {}'.format(len(train_sample_ids)))
