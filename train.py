@@ -3,21 +3,12 @@ import h5py
 import numpy as np
 
 
-# create sample data
-# with h5py.File('dataset.h5', 'r') as hf:
-#     list_samples = [x for x in hf]
-#     num_samples = len(list_samples)
-#     ratio = 0.9
-#     split_point = int(num_samples * ratio)
-#     train_sample_ids, test_sample_ids = np.split(np.random.permutation(list_samples), [split_point])
-
-
 class SampleGenerator:
     def __init__(self, filename, batch_size):
         self.filename = filename
         self.batch_size = batch_size
 
-        train_sample_ids, test_sample_ids = self.split_dataset(ratio=0.90)
+        train_sample_ids, test_sample_ids = self.split_dataset(ratio=0.96)
         num_train_data = len(train_sample_ids)
         self.num_batches = num_train_data // self.batch_size
 
@@ -47,7 +38,7 @@ class SampleGenerator:
 
             for samp_id in id_list:
                 sample = np.array(hf[samp_id]['data'])
-                sample.reshape(sample.shape + (1, ))
+                sample = sample.reshape(sample.shape + (1, ))
                 batch_data.append(sample)
 
                 label = hf[samp_id]['data'].attrs['label']
