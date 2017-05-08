@@ -42,16 +42,16 @@ class SampleGenerator:
                 batch_data.append(sample)
 
                 label = hf[samp_id]['data'].attrs['label']
-                label_flag = [0, 0, 0]
+                # label_flag = [0, 0, 0]
                 if label == 'B':
-                    label_flag[0] = 1
+                    label_idx = 0
                 elif label == 'CD4':
-                    label_flag[1] = 1
+                    label_idx = 1
                 elif label == 'CD8':
-                    label_flag[2] = 1
+                    label_idx = 2
                 else:
                     raise ValueError
-                label_data.append(label_flag)
+                label_data.append(label_idx)
         return batch_data, label_data
 
     def generate_samples(self):
@@ -63,49 +63,10 @@ class SampleGenerator:
         return self.batch_and_label(self.test_sample_ids)
 
 
-# class SampleGenerator:
-#     def __init__(self, data_ids, test_data_ids, batch_size):
-#         num_samps = len(data_ids)
-#         self.num_batches = num_samps // batch_size
-#         data_ids = data_ids[:int(self.num_batches * batch_size)]
-#         self.data_ids = np.split(data_ids, self.num_batches)
-#         self.index = 0
-#         self.test_data_ids = test_data_ids
-#
-#     def reset_index(self):
-#         self.index = 0
-#
-#     def batch_and_label(self, id_list):
-#         with h5py.File('dataset.h5', 'r') as hf:
-#             batch_data = []
-#             label_data = []
-#             for samp_id in id_list:
-#                 data = np.array(hf[str(samp_id)]['data'])
-#                 data = data.reshape(data.shape + (1, ))
-#                 batch_data.append(data)
-#                 label = hf[str(samp_id)]['data'].attrs['label']
-#                 label_flag = [0, 0, 0]
-#
-#                 if label == 'B':
-#                     label_flag[0] = 1
-#                 elif label == 'CD4':
-#                     label_flag[1] = 1
-#                 else:
-#                     label_flag[2] = 1
-#                 label_data.append(label_flag)
-#         return batch_data, label_data
-#
-#     def test_samples(self):
-#         return self.batch_and_label(self.test_data_ids)
-#
-#     def generate_samples(self):
-#         this_batch = self.data_ids[self.index]
-#         self.index += 1
-#         return self.batch_and_label(this_batch)
-
+# PREPARE THE NETWORK
 
 x = tf.placeholder(tf.float32, [None, 66, 66, 66, 1])  # (batch, in_depth, in_height, in_width, in_channels]
-y = tf.placeholder(tf.int8, [None, 3])  # classification btwn. three
+y = tf.placeholder(tf.int64, [None])  # classification btwn. three
 
 FC_SIZE = 1024
 DTYPE = tf.float32
@@ -213,12 +174,13 @@ with tf.variable_scope('softmax_linear') as scope:
 
 print('softmax ready')
 
-cross_entropy = tf.nn.softmax_cross_entropy_with_logits(logits=softmax_linear, labels=y)
+cross_entropy = tf.nn.sparse_softmax_cross_entropy_with_logits(
+    logits=softmax_linear, labels=y)
 loss = tf.reduce_mean(cross_entropy)
 
-optimizer = tf.train.AdamOptimizer(learning_rate=0.01).minimize(loss)
+optimizer = tf.train.AdamOptimizer(learning_rate=0.2).minimize(loss)
 
-_corr = tf.equal(tf.argmax(softmax_linear, 1), tf.argmax(y, 1))  # Count corrects
+_corr = tf.equal(tf.argmax(softmax_linear, 1), y)  # Count corrects
 accr = tf.reduce_mean(tf.cast(_corr, tf.float32))  # Accuracy
 
 print('Network ready!')
