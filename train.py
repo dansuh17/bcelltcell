@@ -46,7 +46,7 @@ class SampleGenerator:
             label_data = []
 
             for samp_id in id_list:
-                sample = hf[samp_id]['data']
+                sample = np.array(hf[samp_id]['data'])
                 sample.reshape(sample.shape + (1, ))
                 batch_data.append(sample)
 
