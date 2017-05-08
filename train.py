@@ -224,7 +224,6 @@ accr = tf.reduce_mean(tf.cast(_corr, tf.float32))  # Accuracy
 print('Network ready!')
 
 if __name__ == '__main__':
-    sg = SampleGenerator(filename='augmented_dataset.h5', batch_size=10)
     # batch, label = sg.generate_samples()
     # print(batch, label)
 
@@ -234,7 +233,9 @@ if __name__ == '__main__':
 
         print('Init complete')
         avg_cost = 0
-        for epoch in range(10):
+        for epoch in range(20):
+            # refresh samples as new epoch begins
+            sg = SampleGenerator(filename='augmented_dataset.h5', batch_size=10)
             sg.reset_index()
             print('epoch : {}'.format(epoch))
             for batch_iter in range(sg.num_batches):
