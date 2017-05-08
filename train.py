@@ -1,67 +1,6 @@
 import tensorflow as tf
-import h5py
 import numpy as np
-
-
-class SampleGenerator:
-    def __init__(self, filename, batch_size):
-        self.filename = filename
-        self.batch_size = batch_size
-
-        train_sample_ids, test_sample_ids = self.split_dataset(ratio=0.96)
-        num_train_data = len(train_sample_ids)
-        self.num_batches = num_train_data // self.batch_size
-
-        # trim the leftovers
-        train_sample_ids = train_sample_ids[:(self.num_batches * self.batch_size)]
-        self.train_sample_sets = np.split(train_sample_ids, self.num_batches)
-        self.test_sample_ids = test_sample_ids
-        self.batch_index = 0
-
-        print('Train samples : {}'.format(len(train_sample_ids)))
-        print('Test samples : {}'.format(len(test_sample_ids)))
-
-    def reset_index(self):
-        self.batch_index = 0
-
-    def split_dataset(self, ratio):
-        with h5py.File(self.filename, 'r') as hf:
-            data_nums = [num for num in hf]
-        num_samples = len(data_nums)
-        split_point = int(num_samples * ratio)
-        return np.split(np.random.permutation(data_nums), [split_point])
-
-    def batch_and_label(self, id_list):
-        with h5py.File(self.filename, 'r') as hf:
-            batch_data = []
-            label_data = []
-
-            for samp_id in id_list:
-                sample = np.array(hf[samp_id]['data'])
-                sample = sample.reshape(sample.shape + (1, ))
-                batch_data.append(sample)
-
-                label = hf[samp_id]['data'].attrs['label']
-                # label_flag = [0, 0, 0]
-                if label == 'B':
-                    label_idx = 0
-                elif label == 'CD4':
-                    label_idx = 1
-                elif label == 'CD8':
-                    label_idx = 2
-                else:
-                    raise ValueError
-                label_data.append(label_idx)
-        return batch_data, label_data
-
-    def generate_samples(self):
-        set_ = self.train_sample_sets[self.batch_index]
-        self.batch_index += 1
-        return self.batch_and_label(set_)
-
-    def test_samples(self):
-        return self.batch_and_label(self.test_sample_ids)
-
+from tomography import SampleGenerator
 
 # PREPARE THE NETWORK
 
@@ -113,7 +52,8 @@ with tf.variable_scope('conv2') as scope:
     prev_layer = conv2
     in_filters = out_filters
 
-# normalize prev_layer here
+# pool prev_layer here
+# TODO: batch normalization?
 prev_layer = tf.nn.max_pool3d(prev_layer, ksize=[1, 3, 3, 3, 1],
                               strides=[1, 2, 2, 2, 1], padding='SAME')
 
@@ -187,7 +127,7 @@ cross_entropy = tf.nn.sparse_softmax_cross_entropy_with_logits(
 loss = tf.reduce_mean(cross_entropy)
 
 # define optimizer
-optimizer = tf.train.AdamOptimizer(learning_rate=0.5).minimize(loss)
+optimizer = tf.train.AdamOptimizer(learning_rate=0.3).minimize(loss)
 
 # calculate accuracy for display
 _corr = tf.equal(tf.argmax(softmax_linear, axis=1), y)  # Count corrects
@@ -205,9 +145,9 @@ if __name__ == '__main__':
 
         print('Init complete')
         avg_cost = 0
-        for epoch in range(20):
+        for epoch in range(200):
             # refresh samples as new epoch begins
-            sg = SampleGenerator(filename='augmented_dataset.h5', batch_size=10)
+            sg = SampleGenerator(filename='augmented_dataset.h5', batch_size=15)
             sg.reset_index()
             print('epoch : {}'.format(epoch))
 
