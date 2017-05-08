@@ -65,7 +65,8 @@ class SampleGenerator:
 
 # PREPARE THE NETWORK
 
-x = tf.placeholder(tf.float32, [None, 66, 66, 66, 1])  # (batch, in_depth, in_height, in_width, in_channels]
+# (batch, in_depth, in_height, in_width, in_channels]
+x = tf.placeholder(tf.float32, [None, 66, 66, 66, 1])
 y = tf.placeholder(tf.int64, [None])  # classification btwn. three
 
 FC_SIZE = 1024
@@ -73,17 +74,20 @@ DTYPE = tf.float32
 
 
 def _weight_variable(name, shape):
-    return tf.get_variable(name, shape, DTYPE, tf.truncated_normal_initializer(stddev=0.1))
+    return tf.get_variable(name, shape, DTYPE,
+                           tf.truncated_normal_initializer(stddev=0.1))
 
 
 def _bias_variable(name, shape):
-    return tf.get_variable(name, shape, DTYPE, tf.constant_initializer(0.1, dtype=DTYPE))
+    return tf.get_variable(name, shape, DTYPE,
+                           tf.constant_initializer(0.1, dtype=DTYPE))
 
 
 with tf.variable_scope('conv1') as scope:
     out_filters = 16
     kernel = _weight_variable('weights', [5, 5, 5, 1, out_filters])
-    conv = tf.nn.conv3d(x, filter=kernel, strides=[1, 1, 1, 1, 1], padding='SAME')
+    conv = tf.nn.conv3d(x, filter=kernel,
+                        strides=[1, 1, 1, 1, 1], padding='SAME')
     biases = _bias_variable('biases', [out_filters])
     bias = tf.nn.bias_add(conv, biases)
     conv1 = tf.nn.relu(bias, name=scope.name)
@@ -91,7 +95,8 @@ with tf.variable_scope('conv1') as scope:
     prev_layer = conv1
     in_filters = out_filters
 
-pool1 = tf.nn.max_pool3d(prev_layer, ksize=[1, 3, 3, 3, 1], strides=[1, 2, 2, 2, 1], padding='SAME')
+pool1 = tf.nn.max_pool3d(prev_layer, ksize=[1, 3, 3, 3, 1],
+                         strides=[1, 2, 2, 2, 1], padding='SAME')
 norm1 = pool1  # tf.nn.lrn(pool1, 4, bias=1.0, alpha=0.001 / 9.0, beta = 0.75, name='norm1')
 
 prev_layer = norm1
@@ -109,7 +114,8 @@ with tf.variable_scope('conv2') as scope:
     in_filters = out_filters
 
 # normalize prev_layer here
-prev_layer = tf.nn.max_pool3d(prev_layer, ksize=[1, 3, 3, 3, 1], strides=[1, 2, 2, 2, 1], padding='SAME')
+prev_layer = tf.nn.max_pool3d(prev_layer, ksize=[1, 3, 3, 3, 1],
+                              strides=[1, 2, 2, 2, 1], padding='SAME')
 
 print('conv2 layer ready')
 with tf.variable_scope('conv3_1') as scope:
@@ -143,7 +149,8 @@ with tf.variable_scope('conv3_3') as scope:
 
 print('conv3-3 layer ready')
 # normalize prev_layer here
-prev_layer = tf.nn.max_pool3d(prev_layer, ksize=[1, 3, 3, 3, 1], strides=[1, 2, 2, 2, 1], padding='SAME')
+prev_layer = tf.nn.max_pool3d(prev_layer, ksize=[1, 3, 3, 3, 1],
+                              strides=[1, 2, 2, 2, 1], padding='SAME')
 
 
 with tf.variable_scope('local3') as scope:
@@ -174,13 +181,16 @@ with tf.variable_scope('softmax_linear') as scope:
 
 print('softmax ready')
 
+# define loss
 cross_entropy = tf.nn.sparse_softmax_cross_entropy_with_logits(
     logits=softmax_linear, labels=y)
 loss = tf.reduce_mean(cross_entropy)
 
-optimizer = tf.train.AdamOptimizer(learning_rate=0.2).minimize(loss)
+# define optimizer
+optimizer = tf.train.AdamOptimizer(learning_rate=0.5).minimize(loss)
 
-_corr = tf.equal(tf.argmax(softmax_linear, 1), y)  # Count corrects
+# calculate accuracy for display
+_corr = tf.equal(tf.argmax(softmax_linear, axis=1), y)  # Count corrects
 accr = tf.reduce_mean(tf.cast(_corr, tf.float32))  # Accuracy
 
 print('Network ready!')
@@ -200,15 +210,20 @@ if __name__ == '__main__':
             sg = SampleGenerator(filename='augmented_dataset.h5', batch_size=10)
             sg.reset_index()
             print('epoch : {}'.format(epoch))
+
+            # for batch iterations
             for batch_iter in range(sg.num_batches):
                 batch_x, batch_y = sg.generate_samples()
                 sess.run(optimizer, feed_dict={x: batch_x, y: batch_y})
-                avg_cost += sess.run(loss, feed_dict={x: batch_x, y: batch_y})
+                loss += sess.run(loss, feed_dict={x: batch_x, y: batch_y})
 
-                if epoch % 2 == 0:
-                    print('loss : {}'.format(avg_cost / 2))
+                if batch_iter % 5 == 0:
+                    print('loss : {}'.format(loss))
                     train_acc = sess.run(accr, feed_dict={x: batch_x, y: batch_y})
                     print('train_acc : {}'.format(train_acc))
                     test_x, test_y = sg.test_samples()
-                    test_acc = sess.run(accr, feed_dict={x: test_x, y: test_y})
+                    test_acc, test_correct = sess.run([accr, _corr], feed_dict={x: test_x, y: test_y})
                     print('test_acc : {}'.format(test_acc))
+                    print('test_correct')
+                    print(test_correct)
+                    print('')
