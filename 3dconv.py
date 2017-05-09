@@ -92,7 +92,6 @@ print('conv3-3 layer ready')
 prev_layer = tf.nn.max_pool3d(prev_layer, ksize=[1, 3, 3, 3, 1],
                               strides=[1, 2, 2, 2, 1], padding='SAME')
 
-
 with tf.variable_scope('local3') as scope:
     dim = np.prod(prev_layer.get_shape().as_list()[1:])
     prev_layer_flat = tf.reshape(prev_layer, [-1, dim])
