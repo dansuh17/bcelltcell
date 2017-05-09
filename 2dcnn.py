@@ -75,6 +75,8 @@ with tf.Session() as sess:
             if batch_iter % 5 == 0:
                 loss_val = sess.run(loss, feed_dict={x: batch_x, y: batch_y})
                 print('loss : {}'.format(loss_val))
+                train_acc = sess.run(accuracy, feed_dict={x: batch_x, y: batch_y})
+                print('train acc : {}'.format(train_acc))
                 test_x, test_y = sg.test_sample_slices()
                 test_acc, test_correct = sess.run([accuracy, corrects],
                                                   feed_dict={x: test_x, y: test_y})
