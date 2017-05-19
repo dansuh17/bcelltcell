@@ -55,10 +55,20 @@ corrects = tf.equal(tf.argmax(out, axis=1), y)
 accuracy = tf.reduce_mean(tf.cast(corrects, tf.float32))
 print('Network ready!')
 
+# create a saver to save the model
+saver = tf.train.Saver()
+print('Saver initialized')
+
+
 with tf.Session() as sess:
+    # training
     print('Begin session')
     init = tf.global_variables_initializer()
     sess.run(init)
+
+    # restoring model:
+    # saver.restore(sess, './model/model.ckpt')
+    # print('Model restored')
 
     print('Init complete')
     for epoch in range(20):
@@ -84,3 +94,7 @@ with tf.Session() as sess:
                 print('test_correct : {} / {}'.format(np.sum(test_correct),
                                                       len(test_correct)))
                 print('')
+
+    # save the trained model
+    save_path = saver.save(sess, './model/model.ckpt')
+    print('Model saved at : {}'.format(save_path))
