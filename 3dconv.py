@@ -124,6 +124,7 @@ print('softmax ready')
 cross_entropy = tf.nn.sparse_softmax_cross_entropy_with_logits(
     logits=softmax_linear, labels=y)
 loss = tf.reduce_mean(cross_entropy)
+tf.summary.scalar('loss', loss)  # save loss
 
 # define optimizer
 optimizer = tf.train.AdamOptimizer(learning_rate=0.3).minimize(loss)
@@ -131,20 +132,25 @@ optimizer = tf.train.AdamOptimizer(learning_rate=0.3).minimize(loss)
 # calculate accuracy for display
 _corr = tf.equal(tf.argmax(softmax_linear, axis=1), y)  # Count corrects
 accr = tf.reduce_mean(tf.cast(_corr, tf.float32))  # Accuracy
+tf.summary.scalar('accr', accr)  # save accuracy
 
 print('Network ready!')
+
 
 if __name__ == '__main__':
     # batch, label = sg.generate_samples()
     # print(batch, label)
 
     with tf.Session() as sess:
+        merged = tf.summary.merge_all()
+        train_writer = tf.summary.FileWriter('./summaries/train', sess.graph)
+        test_writer = tf.summary.FileWriter('./summaries/test')
         print('Begin session')
         sess.run(tf.global_variables_initializer())
 
         print('Init complete')
         avg_cost = 0
-        for epoch in range(200):
+        for epoch in range(250):
             # refresh samples as new epoch begins
             sg = SampleGenerator(filename='augmented_dataset.h5', batch_size=15)
             sg.reset_index()
@@ -154,14 +160,19 @@ if __name__ == '__main__':
             for batch_iter in range(sg.num_batches):
                 batch_x, batch_y = sg.generate_samples()
                 sess.run(optimizer, feed_dict={x: batch_x, y: batch_y})
-                loss_val = sess.run(loss, feed_dict={x: batch_x, y: batch_y})
+                summary, loss_val = sess.run([merged, loss], feed_dict={x: batch_x, y: batch_y})
+                train_writer.add_summary(summary)  # add train summary
 
                 if batch_iter % 5 == 0:
+                    # for training data
                     print('loss : {}'.format(loss_val))
                     train_acc = sess.run(accr, feed_dict={x: batch_x, y: batch_y})
                     print('train_acc : {}'.format(train_acc))
+
+                    # display test data information
                     test_x, test_y = sg.test_samples()
-                    test_acc, test_correct = sess.run([accr, _corr], feed_dict={x: test_x, y: test_y})
+                    test_summary, test_acc, test_correct = sess.run([merged, accr, _corr], feed_dict={x: test_x, y: test_y})
+                    test_writer.add_summary(test_summary)  # add test summary
                     print('test_acc : {}'.format(test_acc))
                     print('test_correct : {} / {}'.format(np.sum(test_correct), len(test_correct)))
                     print('')

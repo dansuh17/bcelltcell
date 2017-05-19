@@ -129,3 +129,5 @@ wbc_data/
 *.npz
 *.gif
 .idea/
+
+*.swp

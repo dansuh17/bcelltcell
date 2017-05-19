@@ -49,7 +49,7 @@ print('fully connected layer ready')
 cross_entropy = tf.nn.sparse_softmax_cross_entropy_with_logits(
     logits=out, labels=y)
 loss = tf.reduce_mean(cross_entropy)
-optimizer = tf.train.AdamOptimizer(learning_rate=0.01).minimize(loss)
+optimizer = tf.train.AdamOptimizer(learning_rate=0.001).minimize(loss)
 
 corrects = tf.equal(tf.argmax(out, axis=1), y)
 accuracy = tf.reduce_mean(tf.cast(corrects, tf.float32))
