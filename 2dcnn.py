@@ -46,21 +46,33 @@ with tf.variable_scope('fc1') as scope:
     out = tf.add(tf.matmul(prev_layer_flat, weights), biases)
 print('fully connected layer ready')
 
+
+# loss
 cross_entropy = tf.nn.sparse_softmax_cross_entropy_with_logits(
     logits=out, labels=y)
 loss = tf.reduce_mean(cross_entropy)
+tf.summary.scalar('loss', loss)  # save summary of loss
+
+# optimize
 optimizer = tf.train.AdamOptimizer(learning_rate=0.001).minimize(loss)
 
+# evaluate
 corrects = tf.equal(tf.argmax(out, axis=1), y)
 accuracy = tf.reduce_mean(tf.cast(corrects, tf.float32))
+tf.summary.scalar('accuracy', accuracy)  # save smmary of accuracy
 print('Network ready!')
 
 # create a saver to save the model
 saver = tf.train.Saver()
 print('Saver initialized')
 
-
+# create a session
 with tf.Session() as sess:
+    # merge summaries and initialize writers
+    merged = tf.summary.merge_all()  # merge summary
+    train_writer = tf.summary.FileWriter('./summaries/train', sess.graph)
+    test_writer = tf.summary.FileWriter('./summaries//test')
+
     # training
     print('Begin session')
     init = tf.global_variables_initializer()
@@ -71,6 +83,7 @@ with tf.Session() as sess:
     # print('Model restored')
 
     print('Init complete')
+    total_iter = 0
     for epoch in range(20):
         # refresh samples as new epoch begins
         sg = SampleGenerator(filename='augmented_dataset.h5', batch_size=10)
@@ -80,16 +93,20 @@ with tf.Session() as sess:
         # for batch iterations
         for batch_iter in range(sg.num_batches):
             batch_x, batch_y = sg.generate_sample_slices()
-            sess.run(optimizer, feed_dict={x: batch_x, y: batch_y})
+            summary, _ = sess.run([merged, optimizer], feed_dict={x: batch_x, y: batch_y})
+            total_iter += 1
+            train_writer.add_summary(summary, total_iter)
 
+            # print intermediate results
             if batch_iter % 5 == 0:
                 loss_val = sess.run(loss, feed_dict={x: batch_x, y: batch_y})
                 print('loss : {}'.format(loss_val))
                 train_acc = sess.run(accuracy, feed_dict={x: batch_x, y: batch_y})
                 print('train acc : {}'.format(train_acc))
                 test_x, test_y = sg.test_sample_slices()
-                test_acc, test_correct = sess.run([accuracy, corrects],
+                summary, test_acc, test_correct = sess.run([merged, accuracy, corrects],
                                                   feed_dict={x: test_x, y: test_y})
+                test_writer.add_summary(summary, total_iter)
                 print('test_acc : {}'.format(test_acc))
                 print('test_correct : {} / {}'.format(np.sum(test_correct),
                                                       len(test_correct)))

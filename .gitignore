@@ -131,3 +131,5 @@ wbc_data/
 .idea/
 
 *.swp
+model/
+summaries/
