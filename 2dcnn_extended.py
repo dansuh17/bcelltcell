@@ -97,11 +97,11 @@ tf.summary.scalar('loss', loss)  # save summary of loss
 # optimize
 # decayed_learning_rate = learning_rate * decay_rate ^ (global_step / decay_steps)
 global_step = tf.Variable(0, trainable=False)
-starter_learning_rate = 0.001
+starter_learning_rate = 0.002
 learning_rate = tf.train.exponential_decay(starter_learning_rate, global_step,
-                                           decay_steps=500, decay_rate=0.95, staircase=True)
+                                           decay_steps=500, decay_rate=0.50, staircase=True)
 optimizer = tf.train.AdamOptimizer(learning_rate).minimize(loss, global_step=global_step)
-tf.summary.scalar('global_step', global_step)
+tf.summary.scalar('learning_rate', learning_rate)
 print('Optimizer Ready')
 
 # evaluate
@@ -131,19 +131,18 @@ with tf.Session() as sess:
     # saver.restore(sess, './model/model.ckpt')
     # print('Model restored')
 
-    total_iter = 0
-    for epoch in range(20):
+    for epoch in range(30):
         # refresh samples as new epoch begins
-        sg = SampleGenerator(filename='augmented_dataset.h5', batch_size=10)
+        sg = SampleGenerator(filename='augmented_dataset.h5', batch_size=15)
         sg.reset_index()
         print('epoch : {}'.format(epoch))
 
         # for batch iterations
         for batch_iter in range(sg.num_batches):
             batch_x, batch_y = sg.generate_sample_slices()
-            summary, _ = sess.run([merged, optimizer], feed_dict={x: batch_x, y: batch_y})
-            total_iter += 1
-            train_writer.add_summary(summary, total_iter)
+            summary, num_step, _ = sess.run([merged, global_step, optimizer],
+                                            feed_dict={x: batch_x, y: batch_y})
+            train_writer.add_summary(summary, num_step)
 
             # print intermediate results
             if batch_iter % 5 == 0:
@@ -154,7 +153,7 @@ with tf.Session() as sess:
                 test_x, test_y = sg.test_sample_slices()
                 summary, test_acc, test_correct = sess.run([merged, accuracy, corrects],
                                                   feed_dict={x: test_x, y: test_y})
-                test_writer.add_summary(summary, total_iter)
+                test_writer.add_summary(summary, num_step)
                 print('test_acc : {}'.format(test_acc))
                 print('test_correct : {} / {}'.format(np.sum(test_correct),
                                                       len(test_correct)))
