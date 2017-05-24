@@ -99,7 +99,7 @@ tf.summary.scalar('loss', loss)  # save summary of loss
 global_step = tf.Variable(0, trainable=False)
 starter_learning_rate = 0.002
 learning_rate = tf.train.exponential_decay(starter_learning_rate, global_step,
-                                           decay_steps=500, decay_rate=0.50, staircase=True)
+                                           decay_steps=500, decay_rate=0.90, staircase=True)
 optimizer = tf.train.AdamOptimizer(learning_rate).minimize(loss, global_step=global_step)
 tf.summary.scalar('learning_rate', learning_rate)
 print('Optimizer Ready')
@@ -118,9 +118,12 @@ print('Saver initialized')
 with tf.Session() as sess:
     # merge summaries and initialize writers
     merged = tf.summary.merge_all()  # merge summary
-    train_writer = tf.summary.FileWriter('./summaries/train_ext', sess.graph)
-    test_writer = tf.summary.FileWriter('./summaries//test_ext')
+    train_writer = tf.summary.FileWriter('./summaries/train_aug', sess.graph)
+    test_writer = tf.summary.FileWriter('./summaries//test_aug')
     print('Summary writers ready')
+
+    sg = SampleGenerator(filename='augmented_dataset_2.h5', batch_size=15)
+    print('Samples ready')
 
     # training
     print('Begin session')
@@ -130,10 +133,8 @@ with tf.Session() as sess:
     # restoring model:
     # saver.restore(sess, './model/model.ckpt')
     # print('Model restored')
-
-    for epoch in range(30):
+    for epoch in range(50):
         # refresh samples as new epoch begins
-        sg = SampleGenerator(filename='augmented_dataset.h5', batch_size=15)
         sg.reset_index()
         print('epoch : {}'.format(epoch))
 

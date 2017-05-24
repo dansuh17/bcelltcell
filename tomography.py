@@ -7,7 +7,7 @@ class SampleGenerator:
         self.filename = filename
         self.batch_size = batch_size
 
-        train_sample_ids, test_sample_ids = self.split_dataset(ratio=0.96)
+        train_sample_ids, test_sample_ids = self.split_dataset(ratio=0.97)
         num_train_data = len(train_sample_ids)
         self.num_batches = num_train_data // self.batch_size
 
