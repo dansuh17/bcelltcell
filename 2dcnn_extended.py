@@ -5,6 +5,7 @@ import numpy as np
 # (batch, in_height, in_width, in_channels)
 x = tf.placeholder(tf.float32, [None, 66, 66, 9])
 y = tf.placeholder(tf.int64, [None])
+images = tf.placeholder(tf.float32, shape=[1, 17, 17])  # for viz
 
 
 with tf.variable_scope('conv1') as scope:
@@ -24,6 +25,7 @@ with tf.variable_scope('conv1') as scope:
 # TODO: ksize? strides?
 pool1 = tf.nn.max_pool(conv1, ksize=[1, 2, 2, 1], strides=[1, 2, 2, 1],
                        padding='SAME')
+pool1_dropout = tf.nn.dropout(pool1, keep_prob=0.7)
 in_filters = out_filters
 print('conv1 layer ready')
 
@@ -31,7 +33,7 @@ with tf.variable_scope('conv2') as scope:
     out_filters = 32
     kernel = tf.get_variable('weights', [3, 3, in_filters, out_filters],
                              tf.float32, tf.truncated_normal_initializer(stddev=0.1))
-    conv = tf.nn.conv2d(pool1, filter=kernel, strides=[1, 1, 1, 1], padding='SAME')
+    conv = tf.nn.conv2d(pool1_dropout, filter=kernel, strides=[1, 1, 1, 1], padding='SAME')
     mean, var = tf.nn.moments(conv, [0, 1, 2])
     conv = tf.nn.batch_normalization(conv, mean, var, 0, 1, 0.0001)  # BN
     biases = tf.get_variable('biases', [out_filters], tf.float32,
@@ -42,32 +44,42 @@ print('conv2 layer ready')
 
 # max pooling
 pool2 = tf.nn.max_pool(conv2, ksize=[1, 2, 2, 1], strides=[1, 2, 2, 1], padding='SAME')
+pool2_dropout = tf.nn.dropout(pool2, keep_prob=0.7)
 in_filters = out_filters
 
 with tf.variable_scope('conv3') as scope:
     out_filters = 16
     kernel = tf.get_variable('weights', [3, 3, in_filters, out_filters],
                              tf.float32, tf.truncated_normal_initializer(stddev=0.1))
-    conv = tf.nn.conv2d(pool2, filter=kernel, strides=[1, 1, 1, 1], padding='SAME')
+    conv = tf.nn.conv2d(pool2_dropout, filter=kernel, strides=[1, 1, 1, 1], padding='SAME')
     mean, var = tf.nn.moments(conv, [0, 1, 2])
     conv = tf.nn.batch_normalization(conv, mean, var, 0, 1, 0.0001)  # BN
     biases = tf.get_variable('biases', [out_filters], tf.float32,
                              tf.constant_initializer(0.1, dtype=tf.float32))
     bias_added = tf.nn.bias_add(conv, biases)
     conv3 = tf.nn.relu(bias_added, name=scope.name)  # activate
+    conv3_dropout = tf.nn.dropout(conv3, keep_prob=0.7)
 print('conv3 layer ready')
+
+# save sample image - lets try...
+conv3_out_shape = conv3_dropout.get_shape().as_list() # ?, 17, 17, 16
+conv3_out_shape = conv3_out_shape[1:-1]
+conv3_out_shape.append(1)
+conv3_out_shape.insert(0, 1)
+slice_image = tf.slice(conv3_dropout, [1, 0, 0, 0], conv3_out_shape)
+tf.summary.image('nn_out_image', slice_image, max_outputs=1)
 
 # fully connected layers
 with tf.variable_scope('fc1') as scope:
     fc_size = 1024
     # flatten dimensions except batch size
-    dim = np.prod(conv3.get_shape().as_list()[1:])
-    prev_layer_flat = tf.reshape(conv3, [-1, dim])  # vectorize
+    dim = np.prod(conv3_dropout.get_shape().as_list()[1:])
+    prev_layer_flat = tf.reshape(conv3_dropout, [-1, dim])  # vectorize
 
     weights = tf.get_variable('weights', [dim, fc_size])
     biases = tf.get_variable('biases', [fc_size])
     fc1_out = tf.nn.relu(tf.add(tf.matmul(prev_layer_flat, weights), biases))
-    fc1_out_dr = tf.nn.dropout(fc1_out, keep_prob=0.7)
+    fc1_out_dr = tf.nn.dropout(fc1_out, keep_prob=0.5)
 print('fully connected layer 1 ready')
 fc_in = fc_size
 
@@ -76,7 +88,7 @@ with tf.variable_scope('fc2') as scope:
     weights = tf.get_variable('weights', [fc_in, fc_out])
     biases = tf.get_variable('biases', [fc_out])
     fc2_out = tf.nn.relu(tf.add(tf.matmul(fc1_out_dr, weights), biases))
-    fc2_out_dr = tf.nn.dropout(fc2_out, keep_prob=0.7)
+    fc2_out_dr = tf.nn.dropout(fc2_out, keep_prob=0.5)
 print('fully connected layer 2 ready')
 fc_in = fc_out
 
@@ -97,9 +109,9 @@ tf.summary.scalar('loss', loss)  # save summary of loss
 # optimize
 # decayed_learning_rate = learning_rate * decay_rate ^ (global_step / decay_steps)
 global_step = tf.Variable(0, trainable=False)
-starter_learning_rate = 0.002
+starter_learning_rate = 0.003
 learning_rate = tf.train.exponential_decay(starter_learning_rate, global_step,
-                                           decay_steps=500, decay_rate=0.90, staircase=True)
+                                           decay_steps=500, decay_rate=0.95, staircase=True)
 optimizer = tf.train.AdamOptimizer(learning_rate).minimize(loss, global_step=global_step)
 tf.summary.scalar('learning_rate', learning_rate)
 print('Optimizer Ready')
@@ -118,8 +130,8 @@ print('Saver initialized')
 with tf.Session() as sess:
     # merge summaries and initialize writers
     merged = tf.summary.merge_all()  # merge summary
-    train_writer = tf.summary.FileWriter('./summaries/train_aug', sess.graph)
-    test_writer = tf.summary.FileWriter('./summaries//test_aug')
+    train_writer = tf.summary.FileWriter('./summaries/train_dropout', sess.graph)
+    test_writer = tf.summary.FileWriter('./summaries//test_dropout')
     print('Summary writers ready')
 
     sg = SampleGenerator(filename='augmented_dataset_2.h5', batch_size=15)
@@ -133,7 +145,7 @@ with tf.Session() as sess:
     # restoring model:
     # saver.restore(sess, './model/model.ckpt')
     # print('Model restored')
-    for epoch in range(50):
+    for epoch in range(70):
         # refresh samples as new epoch begins
         sg.reset_index()
         print('epoch : {}'.format(epoch))
