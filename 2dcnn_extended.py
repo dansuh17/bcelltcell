@@ -7,7 +7,7 @@ import numpy as np
 __EPOCHS__ = 200
 __INIT_LEARNING_RATE__ = 0.003
 __DECAY_STEPS__ = 700  # decays once per this amount of iterations
-__DECAY_RATE__ = 0.98
+__DECAY_RATE__ = 0.95
 __BATCH_SIZE__ = 30
 __KEEP_PROB_CONV__ = 0.8
 __KEEP_PROB_FC__ = 0.7
@@ -147,7 +147,7 @@ with tf.Session() as sess:
     test_writer = tf.summary.FileWriter('./summaries//test_dropout')
     print('Summary writers ready')
 
-    sg = SampleGenerator(filename='augmented_dataset_2.h5', batch_size=__BATCH_SIZE__)
+    sg = SampleGenerator(filename='augmented_dataset_nowater.h5', batch_size=__BATCH_SIZE__)
     print('Samples ready')
 
     # training
