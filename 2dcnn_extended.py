@@ -30,7 +30,8 @@ with tf.variable_scope('conv1') as scope:
                              tf.constant_initializer(0.1, dtype=tf.float32))
     bias_added = tf.nn.bias_add(conv, biases)
     # activate
-    conv1 = tf.nn.relu(bias_added, name=scope.name)  # activate
+    conv1 = tf.nn.relu(bias_added, name=scope.name)
+    tf.summary.histogram("activations", conv1)
 
 # max-pooling
 # TODO: ksize? strides?
@@ -51,6 +52,7 @@ with tf.variable_scope('conv2') as scope:
                              tf.constant_initializer(0.1, dtype=tf.float32))
     bias_added = tf.nn.bias_add(conv, biases)
     conv2 = tf.nn.relu(bias_added, name=scope.name) # activate
+    tf.summary.histogram("activations", conv2)
 print('conv2 layer ready')
 
 # max pooling
@@ -69,6 +71,7 @@ with tf.variable_scope('conv3') as scope:
                              tf.constant_initializer(0.1, dtype=tf.float32))
     bias_added = tf.nn.bias_add(conv, biases)
     conv3 = tf.nn.relu(bias_added, name=scope.name)  # activate
+    tf.summary.histogram("activations", conv3)
     conv3_dropout = tf.nn.dropout(conv3, keep_prob=__KEEP_PROB_CONV__)
 print('conv3 layer ready')
 
@@ -91,6 +94,7 @@ with tf.variable_scope('fc1') as scope:
     weights = tf.get_variable('weights', [dim, fc_size])
     biases = tf.get_variable('biases', [fc_size])
     fc1_out = tf.nn.relu(tf.add(tf.matmul(prev_layer_flat, weights), biases))
+    tf.summary.histogram("fc_out", fc1_out)
     fc1_out_dr = tf.nn.dropout(fc1_out, keep_prob=__KEEP_PROB_FC__)
 print('fully connected layer 1 ready')
 fc_in = fc_size
@@ -100,6 +104,7 @@ with tf.variable_scope('fc2') as scope:
     weights = tf.get_variable('weights', [fc_in, fc_out])
     biases = tf.get_variable('biases', [fc_out])
     fc2_out = tf.nn.relu(tf.add(tf.matmul(fc1_out_dr, weights), biases))
+    tf.summary.histogram("fc_out", fc2_out)
     fc2_out_dr = tf.nn.dropout(fc2_out, keep_prob=__KEEP_PROB_FC__)
 print('fully connected layer 2 ready')
 fc_in = fc_out
@@ -109,6 +114,7 @@ with tf.variable_scope('fc3') as scope:
     weights = tf.get_variable('weights', [fc_in, num_classes])
     biases = tf.get_variable('biases', [num_classes])
     fc3_out = tf.add(tf.matmul(fc2_out_dr, weights), biases)  # no relu, no dropout
+    tf.summary.histogram("fc_out", fc3_out)
 print('fully connected layer 3 ready')
 
 
@@ -132,7 +138,7 @@ print('Optimizer Ready')
 # evaluate
 corrects = tf.equal(tf.argmax(fc3_out, axis=1), y)
 accuracy = tf.reduce_mean(tf.cast(corrects, tf.float32))
-tf.summary.scalar('accuracy', accuracy)  # save smmary of accuracy
+tf.summary.scalar('accuracy', accuracy)  # save summary of accuracy
 print('Network ready!')
 
 # create a saver to save the model
@@ -143,11 +149,13 @@ print('Saver initialized')
 with tf.Session() as sess:
     # merge summaries and initialize writers
     merged = tf.summary.merge_all()  # merge summary
-    train_writer = tf.summary.FileWriter('./summaries/train_dropout', sess.graph)
-    test_writer = tf.summary.FileWriter('./summaries//test_dropout')
+    train_writer = tf.summary.FileWriter('./summaries/train_dropout_nowater_origlab', sess.graph)
+    test_writer = tf.summary.FileWriter('./summaries/test_dropout_nowater_origlab')
     print('Summary writers ready')
 
-    sg = SampleGenerator(filename='augmented_dataset_nowater.h5', batch_size=__BATCH_SIZE__)
+    sg = SampleGenerator(filename='augmented_dataset_nowater.h5',
+                         batch_size=__BATCH_SIZE__,
+                         use_original_sets=True)  # force using original sets
     print('Samples ready')
 
     # training

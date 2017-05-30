@@ -3,16 +3,21 @@ import numpy as np
 
 
 class SampleGenerator:
-    def __init__(self, filename, batch_size):
+    def __init__(self, filename, batch_size, use_original_sets=False):
         self.filename = filename
         self.batch_size = batch_size
 
-        train_sample_ids, test_sample_ids = self.split_dataset(ratio=0.97)
+        # use different split methods
+        if use_original_sets:
+            train_sample_ids, test_sample_ids = self.split_dataset_by_original_labels()
+        else:
+            train_sample_ids, test_sample_ids = self.split_dataset(ratio=0.97)
+
         num_train_data = len(train_sample_ids)
-        self.num_batches = num_train_data // self.batch_size
+        self.num_batches = num_train_data // self.batch_size  # number of batches / epoch
 
         # trim the leftovers
-        train_sample_ids = train_sample_ids[:(self.num_batches * self.batch_size)]
+        train_sample_ids = np.array(train_sample_ids[:(self.num_batches * self.batch_size)])
         self.train_sample_sets = np.split(train_sample_ids, self.num_batches)
         self.test_sample_ids = test_sample_ids
         self.batch_index = 0
@@ -121,6 +126,20 @@ class SampleGenerator:
     def reset_index(self):
         self.batch_index = 0
 
+    def split_dataset_by_original_labels(self):
+        train_data_idx = []
+        test_data_idx = []
+        with h5py.File(self.filename, 'r') as hf:
+            for data_num in hf:
+                original_label = hf[data_num]['data'].attrs['is_train']
+                if original_label == 'train':
+                    train_data_idx.append(data_num)
+                elif original_label == 'test':
+                    test_data_idx.append(data_num)
+                else:
+                    raise ValueError
+        return train_data_idx, test_data_idx
+
     def split_dataset(self, ratio):
         with h5py.File(self.filename, 'r') as hf:
             data_nums = [num for num in hf]
@@ -157,8 +176,12 @@ class SampleGenerator:
         self.batch_index += 1
         return self.batch_and_label_slice(set_)
 
-    def test_sample_slices(self):
-        return self.batch_and_label_slice(self.test_sample_ids)
+    def test_sample_slices(self, random_sample=20):
+        if random_sample is not None:
+            sampled_ids = np.random.choice(self.test_sample_ids, random_sample)
+        else:
+            sanpled_ids = self.test_sample_ids
+        return self.batch_and_label_slice(sampled_ids)
 
 
 if __name__ == '__main__':
