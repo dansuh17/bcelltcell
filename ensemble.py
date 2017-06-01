@@ -1,3 +1,4 @@
+import sys
 from tomography import SampleGenerator
 import tensorflow as tf
 import numpy as np
@@ -7,7 +8,7 @@ import numpy as np
 __EPOCHS__ = 200
 __INIT_LEARNING_RATE__ = 0.003
 __DECAY_STEPS__ = 700  # decays once per this amount of iterations
-__DECAY_RATE__ = 0.95
+__DECAY_RATE__ = 0.93
 __BATCH_SIZE__ = 30
 __KEEP_PROB_CONV__ = 0.8
 __KEEP_PROB_FC__ = 0.7
@@ -26,8 +27,9 @@ class Model:
         return self.sess.run([self.optimizer],
                              feed_dict={self.x: batch_x, self.y: batch_y})
 
-    def glob_step(self):
-        return self.sess.run([self.global_step])
+    def glob_step(self, batch_x, batch_y):
+        return self.sess.run([self.global_step],
+                feed_dict={self.x: batch_x, self.y: batch_y})
 
     def calc_accuracy(self, batch_x, batch_y):
         return self.sess.run([self.accuracy, self.corrects], feed_dict={self.x: batch_x, self.y: batch_y})
@@ -41,8 +43,8 @@ class Model:
     def construct_net(self):
         with tf.variable_scope(self.name):  # create a scope by its name
             # (batch, in_height, in_width, in_channels)
-            self.x = tf.placeholder(tf.float32, [None, 66, 66, 9])
-            self.y = tf.placeholder(tf.int64, [None])
+            self.x = tf.placeholder(tf.float32, [None, 66, 66, 9], name='x')
+            self.y = tf.placeholder(tf.int64, [None], name='y')
             images = tf.placeholder(tf.float32, shape=[1, 17, 17])  # for viz
 
 
@@ -140,7 +142,7 @@ class Model:
                 num_classes = 3
                 weights = tf.get_variable('weights', [fc_in, num_classes])
                 biases = tf.get_variable('biases', [num_classes])
-                fc3_out = tf.add(tf.matmul(fc2_out_dr, weights), biases)  # no relu, no dropout
+                fc3_out = tf.add(tf.matmul(fc2_out_dr, weights), biases, name='logits')  # no relu, no dropout
                 tf.summary.histogram("fc_out" + self.name, fc3_out)
             print('fully connected layer 3 ready')
 
@@ -167,124 +169,182 @@ class Model:
             print('Optimizer Ready')
 
             # evaluate
-            self.corrects = tf.equal(tf.argmax(fc3_out, axis=1), self.y)
-            self.accuracy = tf.reduce_mean(tf.cast(self.corrects, tf.float32))
+            self.corrects = tf.equal(tf.argmax(fc3_out, axis=1), self.y, name='corrects')
+            self.accuracy = tf.reduce_mean(tf.cast(self.corrects, tf.float32), name='accuracy')
             tf.summary.scalar('accuracy' + self.name, self.accuracy)  # save summary of accuracy
             print('Network ready!')
 
+if __name__ == '__main__':
+    # inference testing
+    if len(sys.argv) > 1:
+        assert sys.argv[1] == 'infer'
+        with tf.Session() as sess:
+            # restore trained graph
+            saver = tf.train.import_meta_graph('./model/model_2dcnn_ensemble.ckpt.meta')
+            saver.restore(sess, './model/model_2dcnn_ensemble.ckpt')
 
+            graph = tf.get_default_graph()
+            # print([op.name for op in graph.get_operations()])
+            # print([var.name for var in tf.global_variables()])
 
-# create a session
-with tf.Session() as sess:
-    # create models
-    models = []
-    for model_idx in range(__NUM_MODELS__):
-        models.append(Model(sess, 'model_{}'.format(model_idx)))
-    print('Models Ready')
+            correct_ops = []
+            acc_ops = []
+            xes = []
+            ys = []
+            for i in range(__NUM_MODELS__):
+                correct_op = graph.get_operation_by_name('model_{}/Equal'.format(i))
+                acc_op = graph.get_operation_by_name('model_{}/Mean_1'.format(i))
+                # example result of .outputs[0] : Tensor("model_0/Placeholder:0", shape=(?, 66, 66, 9), dtype=float32)
+                x_placeholder = graph.get_operation_by_name('model_{}/Placeholder'.format(i)).outputs[0]
+                y_placeholder = graph.get_operation_by_name('model_{}/Placeholder_1'.format(i)).outputs[0]
 
-    # create a saver to save the model
-    saver = tf.train.Saver()
-    print('Saver initialized')
+                correct_ops.append(correct_op)
+                acc_ops.append(acc_op)
+                xes.append(x_placeholder)
+                ys.append(y_placeholder)
 
-    # merge summaries and initialize writers
-    merged = tf.summary.merge_all()  # merge summary - does this do for all models?
-    train_writer = tf.summary.FileWriter(
-            './summaries/train_dropout_nowater_ensemble', sess.graph)
-    test_writer = tf.summary.FileWriter('./summaries/test_dropout_nowater_ensemble')
-    print('Summary writers ready')
+            # ensemble testing
+            print('Testing ensemble')
+            sg = SampleGenerator(filename='augmented_dataset_nowater.h5',
+                                batch_size=__BATCH_SIZE__,
+                                use_original_sets=False)
+            # generate test data
+            test_x, test_y = sg.test_sample_slices()
+            test_size = len(test_y)
+            print(test_size)
+            sum_predictions = np.zeros(test_size * 3).reshape(test_size, 3)
 
-    # 'augmented_dataset_2.h5'
-    sg = SampleGenerator(filename='augmented_dataset_nowater.h5',
-                         batch_size=__BATCH_SIZE__,
-                         use_original_sets=False)  # force using original sets
-    print('Samples ready')
-
-    # training
-    print('Begin session')
-    init = tf.global_variables_initializer()
-    sess.run(init)
-
-    # restoring model:
-    # saver.restore(sess, './model/model.ckpt')
-    # print('Model restored')
-    for epoch in range(__EPOCHS__):
-        # refresh samples as new epoch begins
-        sg.reset_index()
-        print('epoch : {}'.format(epoch))
-
-        # for batch iterations
-        for batch_iter in range(sg.num_batches):
-            batch_x, batch_y = sg.generate_sample_slices()
-
-            for model in models:
-                _ = model.train(batch_x, batch_y)
-
-            # for every mod5 == 0, print out the loss / accuracy
-            if batch_iter % 5 == 0:
-                losses = []
-                test_losses = []
-                train_accs = []
-                test_accs = []
-                test_corrects = []
-                for model in models:
-                    # train loss / accuracy
-                    loss_val = model.calc_loss(batch_x, batch_y)
-                    losses.append(loss_val)  # loss values for printing
-                    train_acc, train_correct = model.calc_accuracy(batch_x, batch_y)
-                    train_accs.append(train_acc)
-                    train_corrects.append(train_correct)
-
-                    # test loss / acc
-                    test_x, test_y = sg.test_sample_slices()
-                    test_loss = model.calc_loss(test_x, test_y)
-                    test_acc, test_correct = model.calc_accuracy(test_x, test_y)
-                    test_losses.append(test_loss)
-                    test_accs.append(test_acc)
-                    test_corrects.append(test_correct)
-
-                # print the results
-                print('::: For step {} ::: '.format(batch_iter))
-                print('train loss')
-                print(losses)
-                print('train accuracies')
-                print(train_accs)
-                for idx in range(len(models)):
-                    print('[{} / {}]'.format(
-                        np.sum(train_corrects[idx]), len(train_corrects[idx])), end='')
-                print('')
-
-                print('test loss')
-                print(test_losses)
-                print('test accuracies')
-                print(test_accs)
-                print('test corrects')
-                for idx in range(len(models)):
-                    print('[{} / {}] '.format(
-                        np.sum(test_corrects[idx]), len(test_corrects[idx])), end='')
-                print('\n')
-
-            # store summaries per iterations
+            # create feed dict
             feed_dict_ = {}
-            for m in models:
-                feed_dict_[m.x] = batch_x
-                feed_dict_[m.y] = batch_y
-            summ = sess.run(merged, feed_dict=feed_dict_)
-            train_writer.add_summary(summ, batch_iter)  # write summary
+            for m_idx in range(__NUM_MODELS__):
+                feed_dict_[xes[m_idx]] = test_x
+                feed_dict_[ys[m_idx]] = test_y
 
-    print('Training complete')
-    test_x, test_y = sg.test_sample_slices()
-    test_size = len(test_y)
-    sum_predictions = np.zeros(test_size * 3).reshape(test_size, 3)
-    # sum the predited values from all models
-    for m_idx, model in enumerate(models):
-        predictions = model.predict(test_x, test_y)
-        sum_predictions += predictions
+            # sum the predited values from all models
+            for m_idx in range(__NUM_MODELS__):
+                corrects = sess.run(acc_ops[m_idx], feed_dict=feed_dict_)
+                print(corrects)
+                sum_predictions += predictions
 
-    # retrieve the argmax of sum of predictions from all models
-    ensemble_correct_prediction = tf.equal(tf.argmax(predictions, 1), test_y) # the argmax val should be equal to the label
-    ensemble_accuracy = tf.reduce_mean(tf.cast(ensemble_correct_prediction, tf.float32))
-    print('Ensemble accuracy: {}'.format(ensemble_accuracy))
+            # retrieve the argmax of sum of predictions from all models
+            ensemble_correct_prediction = tf.equal(tf.argmax(predictions, 1), test_y) # the argmax val should be equal to the label
+            ensemble_accuracy = tf.reduce_mean(tf.cast(ensemble_correct_prediction, tf.float32))
+            print('Ensemble accuracy: {}'.format(ensemble_accuracy))
+    else:
+        # simply train when no arguments are given
+        # create a session
+        with tf.Session() as sess:
+            # create models
+            models = []
+            for model_idx in range(__NUM_MODELS__):
+                models.append(Model(sess, 'model_{}'.format(model_idx)))
+            print('Models Ready')
 
-    # save the trained model
-    save_path = saver.save(sess, './model/model_2dcnn_ensemble.ckpt')
-    print('Model saved at : {}'.format(save_path))
+            # create a saver to save the model
+            saver = tf.train.Saver()
+            print('Saver initialized')
+
+            # merge summaries and initialize writers
+            merged = tf.summary.merge_all()  # merge summary - does this do for all models?
+            train_writer = tf.summary.FileWriter(
+                    './summaries/train_dropout_nowater_ensemble', sess.graph)
+            test_writer = tf.summary.FileWriter('./summaries/test_dropout_nowater_ensemble')
+            print('Summary writers ready')
+
+            # 'augmented_dataset_2.h5'
+            sg = SampleGenerator(filename='augmented_dataset_nowater.h5',
+                                batch_size=__BATCH_SIZE__,
+                                use_original_sets=False)  # force using original sets
+            print('Samples ready')
+
+            # training
+            print('Begin session')
+            init = tf.global_variables_initializer()
+            sess.run(init)
+
+            # restoring model:
+            # saver.restore(sess, './model/model.ckpt')
+            # print('Model restored')
+            for epoch in range(__EPOCHS__):
+                # refresh samples as new epoch begins
+                sg.reset_index()
+                print('epoch : {}'.format(epoch))
+
+                # for batch iterations
+                for batch_iter in range(sg.num_batches):
+                    batch_x, batch_y = sg.generate_sample_slices()
+
+                    for model in models:
+                        _ = model.train(batch_x, batch_y)
+
+                    # global step
+                    g_step = models[0].glob_step(batch_x, batch_y)[0]
+
+                    # for every mod5 == 0, print out the loss / accuracy
+                    if g_step % 5 == 0:
+                        losses = []
+                        test_losses = []
+                        train_accs = []
+                        train_corrects = []
+                        test_accs = []
+                        test_corrects = []
+
+                        # generate test samples
+                        test_x, test_y = sg.test_sample_slices()
+
+                        for model in models:
+                            # train loss / accuracy
+                            loss_val = model.calc_loss(batch_x, batch_y)
+                            losses.append(loss_val)  # loss values for printing
+                            train_acc, train_correct = model.calc_accuracy(batch_x, batch_y)
+                            train_accs.append(train_acc)
+                            train_corrects.append(train_correct)
+
+                            # test loss / acc
+                            test_loss = model.calc_loss(test_x, test_y)
+                            test_acc, test_correct = model.calc_accuracy(test_x, test_y)
+                            test_losses.append(test_loss)
+                            test_accs.append(test_acc)
+                            test_corrects.append(test_correct)
+
+                        # print the results
+                        print('::: For step {} , epoch {} ::: '.format(g_step, epoch))
+                        print('train loss')
+                        print(losses)
+                        print('train accuracies')
+                        print(train_accs)
+                        for idx in range(len(models)):
+                            print('[{} / {}] '.format(
+                                np.sum(train_corrects[idx]), len(train_corrects[idx])), end='')
+                        print('')
+
+                        print('test loss')
+                        print(test_losses)
+                        print('test accuracies')
+                        print(test_accs)
+                        print('test corrects')
+                        for idx in range(len(models)):
+                            print('[{} / {}] '.format(
+                                np.sum(test_corrects[idx]), len(test_corrects[idx])), end='')
+                        print('\n')
+
+                        # add test summaries
+                        feed_dict_test = {}
+                        for m in models:
+                            feed_dict_test[m.x] = test_x
+                            feed_dict_test[m.y] = test_y
+                        summ_test = sess.run(merged, feed_dict=feed_dict_test)
+                        test_writer.add_summary(summ_test, g_step)
+
+                    # store train summaries per iteration
+                    feed_dict_ = {}
+                    for m in models:
+                        feed_dict_[m.x] = batch_x
+                        feed_dict_[m.y] = batch_y
+                    summ = sess.run(merged, feed_dict=feed_dict_)
+                    train_writer.add_summary(summ, g_step)  # write summary
+            print('Training complete')
+
+            # save the trained model
+            save_path = saver.save(sess, './model/model_2dcnn_ensemble.ckpt')
+            print('Model saved at : {}'.format(save_path))
