@@ -180,7 +180,7 @@ class SampleGenerator:
         if random_sample is not None:
             sampled_ids = np.random.choice(self.test_sample_ids, random_sample)
         else:
-            sanpled_ids = self.test_sample_ids
+            sampled_ids = self.test_sample_ids
         return self.batch_and_label_slice(sampled_ids)
 
 

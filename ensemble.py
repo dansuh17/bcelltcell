@@ -176,8 +176,7 @@ class Model:
 
 if __name__ == '__main__':
     # inference testing
-    if len(sys.argv) > 1:
-        assert sys.argv[1] == 'infer'
+    if len(sys.argv) > 1 and sys.argv[1] == 'infer':
         with tf.Session() as sess:
             # restore trained graph
             saver = tf.train.import_meta_graph('./model/model_2dcnn_ensemble.ckpt.meta')
@@ -187,16 +186,17 @@ if __name__ == '__main__':
             # print([op.name for op in graph.get_operations()])
             # print([var.name for var in tf.global_variables()])
 
+            # collect ops
             correct_ops = []
             acc_ops = []
             xes = []
             ys = []
             for i in range(__NUM_MODELS__):
-                correct_op = graph.get_operation_by_name('model_{}/Equal'.format(i))
-                acc_op = graph.get_operation_by_name('model_{}/Mean_1'.format(i))
+                correct_op = graph.get_operation_by_name('model_{}/corrects'.format(i))
+                acc_op = graph.get_operation_by_name('model_{}/accuracy'.format(i))
                 # example result of .outputs[0] : Tensor("model_0/Placeholder:0", shape=(?, 66, 66, 9), dtype=float32)
-                x_placeholder = graph.get_operation_by_name('model_{}/Placeholder'.format(i)).outputs[0]
-                y_placeholder = graph.get_operation_by_name('model_{}/Placeholder_1'.format(i)).outputs[0]
+                x_placeholder = graph.get_operation_by_name('model_{}/x'.format(i)).outputs[0]
+                y_placeholder = graph.get_operation_by_name('model_{}/y'.format(i)).outputs[0]
 
                 correct_ops.append(correct_op)
                 acc_ops.append(acc_op)
@@ -209,10 +209,10 @@ if __name__ == '__main__':
                                 batch_size=__BATCH_SIZE__,
                                 use_original_sets=False)
             # generate test data
-            test_x, test_y = sg.test_sample_slices()
+            test_x, test_y = sg.test_sample_slices(random_sample=None)
             test_size = len(test_y)
-            print(test_size)
-            sum_predictions = np.zeros(test_size * 3).reshape(test_size, 3)
+            print('test size : {}'.format(test_size))
+            sum_predictions = np.zeros(test_size)
 
             # create feed dict
             feed_dict_ = {}
@@ -222,14 +222,20 @@ if __name__ == '__main__':
 
             # sum the predited values from all models
             for m_idx in range(__NUM_MODELS__):
-                corrects = sess.run(acc_ops[m_idx], feed_dict=feed_dict_)
-                print(corrects)
+                corrects = sess.run(acc_ops[m_idx].outputs[0], feed_dict=feed_dict_)
+                predictions = sess.run(correct_ops[m_idx].outputs[0], feed_dict=feed_dict_)
+                print(np.array(predictions).astype(int))
+                print('Accuracy for model {} : {} / {}'.format(m_idx, np.sum(predictions), test_size))
                 sum_predictions += predictions
 
             # retrieve the argmax of sum of predictions from all models
-            ensemble_correct_prediction = tf.equal(tf.argmax(predictions, 1), test_y) # the argmax val should be equal to the label
-            ensemble_accuracy = tf.reduce_mean(tf.cast(ensemble_correct_prediction, tf.float32))
-            print('Ensemble accuracy: {}'.format(ensemble_accuracy))
+            # ensemble_correct_prediction = tf.equal(tf.argmax(predictions, 1), test_y) # the argmax val should be equal to the label
+            # ensemble_accuracy = tf.reduce_mean(tf.cast(ensemble_correct_prediction, tf.float32))
+
+            # simply do a majority vote
+            ensemble_accuracy = sum_predictions > (__NUM_MODELS__ / 2)
+            total_corrects = np.sum(ensemble_accuracy)
+            print('Ensemble accuracy: {} / {}'.format(total_corrects, test_size))
     else:
         # simply train when no arguments are given
         # create a session
