@@ -132,12 +132,10 @@ class SampleGenerator:
         with h5py.File(self.filename, 'r') as hf:
             for data_num in hf:
                 original_label = hf[data_num]['data'].attrs['is_train']
-                if original_label == 'train':
-                    train_data_idx.append(data_num)
-                elif original_label == 'test':
+                if 'testoriginal' in original_label:
                     test_data_idx.append(data_num)
                 else:
-                    raise ValueError
+                    train_data_idx.append(data_num)
         return train_data_idx, test_data_idx
 
     def split_dataset(self, ratio):
