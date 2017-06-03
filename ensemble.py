@@ -175,6 +175,12 @@ class Model:
             print('Network ready!')
 
 if __name__ == '__main__':
+    # 'augmented_dataset_2.h5'
+    sg = SampleGenerator(filename='augmented_dataset_nowater.h5',
+                        batch_size=__BATCH_SIZE__,
+                        use_original_sets=True)  # force using original sets
+    print('Samples ready')
+
     # inference testing
     if len(sys.argv) > 1 and sys.argv[1] == 'infer':
         with tf.Session() as sess:
@@ -198,6 +204,7 @@ if __name__ == '__main__':
                 x_placeholder = graph.get_operation_by_name('model_{}/x'.format(i)).outputs[0]
                 y_placeholder = graph.get_operation_by_name('model_{}/y'.format(i)).outputs[0]
 
+                # append to lists
                 correct_ops.append(correct_op)
                 acc_ops.append(acc_op)
                 xes.append(x_placeholder)
@@ -205,9 +212,6 @@ if __name__ == '__main__':
 
             # ensemble testing
             print('Testing ensemble')
-            sg = SampleGenerator(filename='augmented_dataset_nowater.h5',
-                                batch_size=__BATCH_SIZE__,
-                                use_original_sets=False)
             # generate test data
             test_x, test_y = sg.test_sample_slices(random_sample=None)
             test_size = len(test_y)
@@ -228,14 +232,12 @@ if __name__ == '__main__':
                 print('Accuracy for model {} : {} / {}'.format(m_idx, np.sum(predictions), test_size))
                 sum_predictions += predictions
 
-            # retrieve the argmax of sum of predictions from all models
-            # ensemble_correct_prediction = tf.equal(tf.argmax(predictions, 1), test_y) # the argmax val should be equal to the label
-            # ensemble_accuracy = tf.reduce_mean(tf.cast(ensemble_correct_prediction, tf.float32))
-
             # simply do a majority vote
             ensemble_accuracy = sum_predictions > (__NUM_MODELS__ / 2)
             total_corrects = np.sum(ensemble_accuracy)
             print('Ensemble accuracy: {} / {}'.format(total_corrects, test_size))
+            print('Original labels')
+            print(test_y)
     else:
         # simply train when no arguments are given
         # create a session
@@ -256,12 +258,6 @@ if __name__ == '__main__':
                     './summaries/train_dropout_nowater_ensemble', sess.graph)
             test_writer = tf.summary.FileWriter('./summaries/test_dropout_nowater_ensemble')
             print('Summary writers ready')
-
-            # 'augmented_dataset_2.h5'
-            sg = SampleGenerator(filename='augmented_dataset_nowater.h5',
-                                batch_size=__BATCH_SIZE__,
-                                use_original_sets=False)  # force using original sets
-            print('Samples ready')
 
             # training
             print('Begin session')
