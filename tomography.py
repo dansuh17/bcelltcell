@@ -3,13 +3,14 @@ import numpy as np
 
 
 class SampleGenerator:
-    def __init__(self, filename, batch_size, use_original_sets=False):
+    def __init__(self, filename, batch_size, use_original_sets=False, no_test_aug=False):
         self.filename = filename
         self.batch_size = batch_size
 
         # use different split methods
         if use_original_sets:
-            train_sample_ids, test_sample_ids = self.split_dataset_by_original_labels()
+            train_sample_ids, test_sample_ids = \
+                    self.split_dataset_by_original_labels(no_test_aug)
         else:
             train_sample_ids, test_sample_ids = self.split_dataset(ratio=0.97)
 
@@ -24,6 +25,10 @@ class SampleGenerator:
 
         print('Train samples : {}'.format(len(train_sample_ids)))
         print('Test samples : {}'.format(len(test_sample_ids)))
+        if use_original_sets:
+            print('Test using original test labels')
+        if no_test_aug:
+            print('Test excludes augmented test set data')
 
     @staticmethod
     def slice_nine(sample, cut_idx: int=33):
@@ -126,13 +131,20 @@ class SampleGenerator:
     def reset_index(self):
         self.batch_index = 0
 
-    def split_dataset_by_original_labels(self):
+    def split_dataset_by_original_labels(self, no_test_aug):
         train_data_idx = []
         test_data_idx = []
         with h5py.File(self.filename, 'r') as hf:
             for data_num in hf:
                 original_label = hf[data_num]['data'].attrs['is_train']
-                if 'testoriginal' in original_label:
+                if no_test_aug:
+                    # exclude also the augmented results of the original test data
+                    test_string = 'test'
+                else:
+                    # only exclude the original test data
+                    test_string = 'testoriginal'
+
+                if test_string in original_label:
                     test_data_idx.append(data_num)
                 else:
                     train_data_idx.append(data_num)
@@ -166,8 +178,12 @@ class SampleGenerator:
         self.batch_index += 1
         return self.batch_and_label(set_)
 
-    def test_samples(self):
-        return self.batch_and_label(self.test_sample_ids)
+    def test_samples(self, random_sample=20):
+        if random_sample is not None:
+            sample_ids = np.random.choice(self.test_sample_ids, random_sample)
+        else:
+            sample_ids = self.test_sample_ids
+        return self.batch_and_label(sample_ids)
 
     def generate_sample_slices(self):
         set_ = self.train_sample_sets[self.batch_index]

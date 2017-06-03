@@ -17,9 +17,10 @@ __NUM_MODELS__ = 5
 
 class Model:
     """Defines a single model."""
-    def __init__(self, sess, name):
+    def __init__(self, sess, name, model_num):
         self.sess = sess
         self.name = name
+        self.model_num = model_num
         self.construct_net()
 
     def train(self, batch_x, batch_y):
@@ -50,8 +51,11 @@ class Model:
 
             with tf.variable_scope('conv1') as scope:
                 out_filters = 64
-                kernel = tf.get_variable('wieghts', [5, 5, 9, out_filters], tf.float32,
-                                        tf.truncated_normal_initializer(stddev=0.1))
+                kernel = tf.get_variable('wieghts',
+                                         [5, 5, 9, out_filters],
+                                         tf.float32,
+                                         tf.truncated_normal_initializer(
+                                              stddev=0.1, seed=self.model_num))
                 conv = tf.nn.conv2d(self.x, filter=kernel, strides=[1, 1, 1, 1], padding='SAME')
                 mean, var = tf.nn.moments(conv, [0, 1, 2])
                 conv = tf.nn.batch_normalization(conv, mean, var, 0, 1, 0.0001)  # BN
@@ -175,10 +179,12 @@ class Model:
             print('Network ready!')
 
 if __name__ == '__main__':
+    # create a sample generator
     # 'augmented_dataset_2.h5'
     sg = SampleGenerator(filename='augmented_dataset_nowater.h5',
                         batch_size=__BATCH_SIZE__,
-                        use_original_sets=True)  # force using original sets
+                        use_original_sets=True,  # force using original sets
+                        no_test_aug=True)  # do not use augmented data from test set
     print('Samples ready')
 
     # inference testing
@@ -187,8 +193,9 @@ if __name__ == '__main__':
             # restore trained graph
             saver = tf.train.import_meta_graph('./model/model_2dcnn_ensemble.ckpt.meta')
             saver.restore(sess, './model/model_2dcnn_ensemble.ckpt')
-
             graph = tf.get_default_graph()
+
+            # this is how you print operations
             # print([op.name for op in graph.get_operations()])
             # print([var.name for var in tf.global_variables()])
 
@@ -200,7 +207,8 @@ if __name__ == '__main__':
             for i in range(__NUM_MODELS__):
                 correct_op = graph.get_operation_by_name('model_{}/corrects'.format(i))
                 acc_op = graph.get_operation_by_name('model_{}/accuracy'.format(i))
-                # example result of .outputs[0] : Tensor("model_0/Placeholder:0", shape=(?, 66, 66, 9), dtype=float32)
+                # example result of .outputs[0] :
+                # Tensor("model_0/Placeholder:0", shape=(?, 66, 66, 9), dtype=float32)
                 x_placeholder = graph.get_operation_by_name('model_{}/x'.format(i)).outputs[0]
                 y_placeholder = graph.get_operation_by_name('model_{}/y'.format(i)).outputs[0]
 
@@ -245,7 +253,7 @@ if __name__ == '__main__':
             # create models
             models = []
             for model_idx in range(__NUM_MODELS__):
-                models.append(Model(sess, 'model_{}'.format(model_idx)))
+                models.append(Model(sess, 'model_{}'.format(model_idx), model_num=model_idx))
             print('Models Ready')
 
             # create a saver to save the model
@@ -261,6 +269,7 @@ if __name__ == '__main__':
 
             # training
             print('Begin session')
+            tf.set_random_seed(1123)   # different random seed
             init = tf.global_variables_initializer()
             sess.run(init)
 

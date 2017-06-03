@@ -133,3 +133,4 @@ wbc_data/
 *.swp
 model/
 summaries/
+tags

@@ -130,38 +130,38 @@ tf.summary.scalar('loss', loss)  # save loss
 optimizer = tf.train.AdamOptimizer(learning_rate=0.3).minimize(loss)
 
 # calculate accuracy for display
-_corr = tf.equal(tf.argmax(softmax_linear, axis=1), y)  # Count corrects
+predicted = tf.argmax(softmax_linear, axis=1)
+_corr = tf.equal(predicted, y)  # Count corrects
 accr = tf.reduce_mean(tf.cast(_corr, tf.float32))  # Accuracy
-tf.summary.scalar('accr', accr)  # save accuracy
+tf.summary.scalar('accruracy', accr)  # save accuracy
 
 print('Network ready!')
 
 
 if __name__ == '__main__':
-    # batch, label = sg.generate_samples()
-    # print(batch, label)
-
     with tf.Session() as sess:
         merged = tf.summary.merge_all()
-        train_writer = tf.summary.FileWriter('./summaries/train', sess.graph)
-        test_writer = tf.summary.FileWriter('./summaries/test')
+        train_writer = tf.summary.FileWriter('./summaries/train_3d', sess.graph)
+        test_writer = tf.summary.FileWriter('./summaries/test_3d')
         print('Begin session')
         sess.run(tf.global_variables_initializer())
 
         print('Init complete')
         avg_cost = 0
+        global_step = 0
         for epoch in range(250):
             # refresh samples as new epoch begins
-            sg = SampleGenerator(filename='augmented_dataset.h5', batch_size=15)
+            sg = SampleGenerator(filename='augmented_dataset_nowater.h5', batch_size=20)
             sg.reset_index()
             print('epoch : {}'.format(epoch))
 
             # for batch iterations
             for batch_iter in range(sg.num_batches):
+                global_step += 1
                 batch_x, batch_y = sg.generate_samples()
                 sess.run(optimizer, feed_dict={x: batch_x, y: batch_y})
                 summary, loss_val = sess.run([merged, loss], feed_dict={x: batch_x, y: batch_y})
-                train_writer.add_summary(summary)  # add train summary
+                train_writer.add_summary(summary, global_step)  # add train summary
 
                 if batch_iter % 5 == 0:
                     # for training data
@@ -172,7 +172,20 @@ if __name__ == '__main__':
                     # display test data information
                     test_x, test_y = sg.test_samples()
                     test_summary, test_acc, test_correct = sess.run([merged, accr, _corr], feed_dict={x: test_x, y: test_y})
-                    test_writer.add_summary(test_summary)  # add test summary
+                    test_writer.add_summary(test_summary, global_step)  # add test summary
                     print('test_acc : {}'.format(test_acc))
                     print('test_correct : {} / {}'.format(np.sum(test_correct), len(test_correct)))
                     print('')
+        print('Training Completed')
+
+        print('Testing for all test sets')
+        test_x, test_y = sg.generate_samples(random_sample=None)
+        test_acc, test_corr, test_pred = sess.run(
+                [accr, _corr, predicted], feed_dict={x: test_x, y: test_y})
+
+        print('Test Accuracy')
+        print(accr)
+        print('Test Corrects')
+        print(test_corr)
+        print('Test Predictions')
+        print(test_pred)
