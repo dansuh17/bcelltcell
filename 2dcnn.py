@@ -70,8 +70,8 @@ print('Saver initialized')
 with tf.Session() as sess:
     # merge summaries and initialize writers
     merged = tf.summary.merge_all()  # merge summary
-    train_writer = tf.summary.FileWriter('./summaries/train', sess.graph)
-    test_writer = tf.summary.FileWriter('./summaries//test')
+    train_writer = tf.summary.FileWriter('./summaries/train_vanilla', sess.graph)
+    test_writer = tf.summary.FileWriter('./summaries//test_vanilla')
 
     # training
     print('Begin session')
@@ -84,9 +84,10 @@ with tf.Session() as sess:
 
     print('Init complete')
     total_iter = 0
-    for epoch in range(20):
+    for epoch in range(200):
         # refresh samples as new epoch begins
-        sg = SampleGenerator(filename='augmented_dataset.h5', batch_size=10)
+        sg = SampleGenerator(filename='augmented_dataset_nowater.h5', batch_size=20,
+                             use_original_sets=True, no_test_aug=True)
         sg.reset_index()
         print('epoch : {}'.format(epoch))
 
@@ -113,5 +114,5 @@ with tf.Session() as sess:
                 print('')
 
     # save the trained model
-    save_path = saver.save(sess, './model/model.ckpt')
+    save_path = saver.save(sess, './model/model_vanilla.ckpt')
     print('Model saved at : {}'.format(save_path))
