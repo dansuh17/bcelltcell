@@ -140,6 +140,9 @@ print('Network ready!')
 
 if __name__ == '__main__':
     with tf.Session() as sess:
+        saver = tf.train.Saver()
+        print('Saver initialized')
+
         merged = tf.summary.merge_all()
         train_writer = tf.summary.FileWriter('./summaries/train_3d', sess.graph)
         test_writer = tf.summary.FileWriter('./summaries/test_3d')
@@ -149,7 +152,7 @@ if __name__ == '__main__':
         print('Init complete')
         avg_cost = 0
         global_step = 0
-        for epoch in range(250):
+        for epoch in range(200):
             # refresh samples as new epoch begins
             sg = SampleGenerator(filename='augmented_dataset_nowater.h5', batch_size=20)
             sg.reset_index()
@@ -176,10 +179,14 @@ if __name__ == '__main__':
                     print('test_acc : {}'.format(test_acc))
                     print('test_correct : {} / {}'.format(np.sum(test_correct), len(test_correct)))
                     print('')
+
+        # save the model once the training is done
+        saved_path = saver.save(sess, './model/model_3dcnn.ckpt')
         print('Training Completed')
+        print('Model saved at: {}'.format(saved_path))
 
         print('Testing for all test sets')
-        test_x, test_y = sg.generate_samples(random_sample=None)
+        test_x, test_y = sg.test_samples(random_sample=None)
         test_acc, test_corr, test_pred = sess.run(
                 [accr, _corr, predicted], feed_dict={x: test_x, y: test_y})
 
@@ -189,3 +196,4 @@ if __name__ == '__main__':
         print(test_corr)
         print('Test Predictions')
         print(test_pred)
+
